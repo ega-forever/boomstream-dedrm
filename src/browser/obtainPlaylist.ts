@@ -31,7 +31,7 @@ const triggerPlaylistObtainProcess = async (
   domProgressBarNode: Node
 ) => {
   const masterPlayListMetaData: any = m3u8Parser(masterPlaylist.data, masterPlaylist.url);
-  const maxLevel = masterPlayListMetaData.levels.sort((a, b) => b.bandwidth - a.bandwidth)[0];
+  const maxLevel = masterPlayListMetaData.levels.sort((a, b) => parseInt(b.bandwidth, 10) - parseInt(a.bandwidth, 10))[0];
   const responsePlaylist = await safeRequest(maxLevel.url, headers);
   const playListWithMaxResolutionData = await responsePlaylist.text();
 
