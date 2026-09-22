@@ -37,28 +37,33 @@ const createProgressBar = () => {
 
 const domElement = createProgressBar();
 
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-  await sem.acquire();
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  void (async () => {
+    await sem.acquire();
+    try {
+      if (request.url.includes('/process/') && masterPlaylist) {
+        await triggerPlaylistObtainProcess(request.url, request.headers, masterPlaylist, domElement);
+        masterPlaylist = null;
+      }
 
-  if (request.url.includes('/process/') && masterPlaylist) {
-    await triggerPlaylistObtainProcess(request.url, request.headers, masterPlaylist, domElement);
-    masterPlaylist = null;
-  }
-
-  const ext = request.url.split('?')[0].split('#')[0].split('.').pop();
-
-  if (ext === 'm3u8' && !masterPlaylist) {
-    const data = await safeRequest(request.url, request.headers);
-    const playlistData = await data.text();
-    if (playlistData.includes('EXT-X-STREAM-INF')) {
-      masterPlaylist = {
-        url: request.url,
-        data: playlistData
-      };
+      const ext = request.url.split('?')[0].split('#')[0].split('.').pop();
+      if (ext === 'm3u8' && !masterPlaylist) {
+        const data = await safeRequest(request.url, request.headers);
+        const playlistData = await data.text();
+        if (playlistData.includes('EXT-X-STREAM-INF')) {
+          masterPlaylist = {
+            url: request.url,
+            data: playlistData
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Boomstream download failed', error);
+      domElement.textContent = `Download failed: ${error.message}`;
+    } finally {
+      sem.release();
+      sendResponse({}); // call after request processed
     }
-  }
-
-  sem.release();
-
-  sendResponse({}); // call after request processed
+  })();
+  return true;
 });

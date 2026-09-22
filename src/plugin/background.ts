@@ -21,6 +21,47 @@ const statePerTab: Map<string, {
   isOnTrack: boolean
 }> = new Map();
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || message.type !== 'boomstream-fetch') {
+    return;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(message.url);
+  } catch {
+    sendResponse({ error: 'Invalid segment URL' });
+    return;
+  }
+
+  if (!sender.tab || url.protocol !== 'https:' || !url.hostname.endsWith('.boomstream.com')) {
+    sendResponse({ error: 'Segment URL is not permitted' });
+    return;
+  }
+
+  void (async () => {
+    try {
+      const response = await fetch(url.href, {
+        method: 'GET',
+        headers: message.headers
+      });
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const parts: string[] = [];
+      for (let i = 0; i < bytes.length; i += 32768) {
+        parts.push(String.fromCharCode(...bytes.subarray(i, i + 32768)));
+      }
+      sendResponse({
+        status: response.status,
+        statusText: response.statusText,
+        body: btoa(parts.join(''))
+      });
+    } catch (error) {
+      sendResponse({ error: String(error) });
+    }
+  })();
+  return true;
+});
+
 const setBadgeForWebsiteByTab = async (tab) => {
   const website = new URL(tab.url).origin;
   const tabsForTheWebsite = (await chrome.tabs.query({}))
